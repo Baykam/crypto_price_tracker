@@ -1,0 +1,48 @@
+app:
+  env: development        
+
+
+server:
+  api: http://localhost:8080            
+  server_port: "8080"
+  grpc_port: "9090"
+
+
+log:
+  level: debug            
+  env: development        
+
+postgres:
+  host: localhost         
+  port: 5432
+  user: postgres
+  password: postgres
+  db_name: crypto_tracker
+  ssl_mode: disable
+  max_conns: 25
+  min_conns: 5
+
+redis:
+  host: localhost        
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 10
+
+kafka:
+  brokers:
+    - localhost:29092     
+  topic: price-updates
+  group_id: crypto-tracker-group
+  write_timeout_sec: 10
+  read_timeout_sec: 10
+
+binance:
+  base_url: "wss://stream.binance.com:9443/stream?streams="
+  reconnect_wait_sec: 3
+  read_timeout_sec: 60
+  symbols:
+    - BTCUSDT
+    - ETHUSDT
+    - BNBUSDT
+    - SOLUSDT

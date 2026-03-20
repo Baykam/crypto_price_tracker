@@ -1,0 +1,43 @@
+app:
+  env: production
+  server_port: "8080"
+  grpc_port: "9090"
+
+log:
+  level: info
+  env: production
+
+postgres:
+  host: crypto_postgres   # docker container adı
+  port: 5432
+  user: postgres
+  password: postgres
+  db_name: crypto_tracker
+  ssl_mode: disable
+  max_conns: 25
+  min_conns: 5
+
+redis:
+  host: crypto_redis      # docker container adı
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 10
+
+kafka:
+  brokers:
+    - crypto_kafka:9092   # docker container adı
+  topic: price-updates
+  group_id: crypto-tracker-group
+  write_timeout_sec: 10
+  read_timeout_sec: 10
+
+binance:
+  base_url: "wss://stream.binance.com:9443/stream?streams="
+  reconnect_wait_sec: 3
+  read_timeout_sec: 60
+  symbols:
+    - BTCUSDT
+    - ETHUSDT
+    - BNBUSDT
+    - SOLUSDT

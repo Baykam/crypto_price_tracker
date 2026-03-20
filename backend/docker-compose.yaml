@@ -1,0 +1,99 @@
+version: '3.9'
+
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  crypto_postgres:
+    image: postgres:16-alpine
+    container_name: crypto_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: crypto_tracker
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crypto_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  crypto_redis:
+    image: redis:7-alpine
+    container_name: crypto_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Zookeeper ────────────────────────────────────────────────────────────────
+  crypto_zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: crypto_zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Kafka ────────────────────────────────────────────────────────────────────
+  crypto_kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: crypto_kafka
+    restart: unless-stopped
+    depends_on:
+      crypto_zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: crypto_zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://crypto_kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  # ── Go Server ────────────────────────────────────────────────────────────────
+  crypto_server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crypto_server
+    restart: unless-stopped
+    environment:
+      CONFIG_PATH: config/config.docker.yaml
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    depends_on:
+      crypto_postgres:
+        condition: service_healthy
+      crypto_redis:
+        condition: service_healthy
+      crypto_kafka:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
