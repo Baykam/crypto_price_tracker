@@ -45,6 +45,9 @@ func NewProducer(cfg *Config) (*Producer, error) {
 		Topic:                  cfg.Topic,
 		Balancer:               &kafka.LeastBytes{},
 		WriteTimeout:           cfg.WriteTimeout,
+		BatchSize:              100,
+		BatchBytes:             5 << 20,
+		BatchTimeout:           10 * time.Millisecond,
 		AllowAutoTopicCreation: true,
 	}
 
@@ -79,6 +82,7 @@ func NewConsumer(cfg *Config, log *zap.Logger) (*Consumer, error) {
 		MinBytes:    1,
 		MaxBytes:    10 << 20,
 		StartOffset: kafka.LastOffset,
+		MaxWait:     100 * time.Millisecond,
 	})
 
 	return &Consumer{reader: reader, logger: log}, nil
@@ -89,7 +93,7 @@ func (c *Consumer) Consume(ctx context.Context, handler func(key, value []byte) 
 		msg, err := c.reader.ReadMessage(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil // graceful shutdown
+				return nil
 			}
 			c.logger.Error("kafka read", zap.Error(err))
 			continue

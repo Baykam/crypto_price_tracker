@@ -8,6 +8,8 @@ import (
 	redisConsumer "crypto_price_tracker_backend/pkg/redis"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -17,10 +19,14 @@ import (
 
 type yamlConfig struct {
 	App struct {
-		Host       string `yaml:"server_host"`
+		Env string `yaml:"env"`
+	} `yaml:"app"`
+
+	Server struct {
+		Host       string `yaml:"api"`
 		ServerPort string `yaml:"server_port"`
 		GRPCPort   string `yaml:"grpc_port"`
-	} `yaml:"app"`
+	} `yaml:"server"`
 
 	Log struct {
 		Level string `yaml:"level"`
@@ -69,6 +75,7 @@ type Server struct {
 }
 
 type Config struct {
+	App      struct{ Env string }
 	Log      *logger.Config
 	Postgres *postgres.Config
 	Redis    *redisConsumer.Config
@@ -79,10 +86,24 @@ type Config struct {
 
 func Load() (*Config, error) {
 	path := os.Getenv("CONFIG_PATH")
+
 	if path == "" {
-		path = "config/config.yaml"
+		currentDir, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("geçerli dizin alınamadı: %w", err)
+		}
+
+		replacer := strings.NewReplacer(
+			filepath.Join("cmd", "server"), "",
+			"cmd/server", "",
+			"cmd\\server", "",
+		)
+		rootDir := replacer.Replace(currentDir)
+
+		path = filepath.Join(rootDir, "config", "config.yaml")
 	}
 
+	fmt.Printf("Loading config from: %s\n", path)
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("config açılamadı (%s): %w", path, err)
@@ -95,10 +116,16 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
+		App: struct {
+			Env string
+		}{
+			Env: y.App.Env,
+		},
+
 		Server: &Server{
-			ServerHost: y.App.Host,
-			ServerPort: y.App.ServerPort,
-			GRPCPort:   y.App.GRPCPort,
+			ServerHost: y.Server.Host,
+			ServerPort: y.Server.ServerPort,
+			GRPCPort:   y.Server.GRPCPort,
 		},
 
 		Log: &logger.Config{

@@ -1,7 +1,11 @@
 app:
   env: production
+
+server:
+  api: 0.0.0.0:8080            
   server_port: "8080"
   grpc_port: "9090"
+
 
 log:
   level: info

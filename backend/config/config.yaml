@@ -3,7 +3,7 @@ app:
 
 
 server:
-  api: http://localhost:8080            
+  api: 0.0.0.0:8080            
   server_port: "8080"
   grpc_port: "9090"
 

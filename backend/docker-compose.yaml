@@ -75,24 +75,24 @@ services:
       retries: 15
 
   # ── Go Server ────────────────────────────────────────────────────────────────
-  crypto_server:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: crypto_server
-    restart: unless-stopped
-    environment:
-      CONFIG_PATH: config/config.docker.yaml
-    ports:
-      - "8080:8080"
-      - "9090:9090"
-    depends_on:
-      crypto_postgres:
-        condition: service_healthy
-      crypto_redis:
-        condition: service_healthy
-      crypto_kafka:
-        condition: service_healthy
+  # crypto_server:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: crypto_server
+  #   restart: unless-stopped
+  #   environment:
+  #     CONFIG_PATH: config/config.docker.yaml
+  #   ports:
+  #     - "8080:8080"
+  #     - "9090:9090"
+  #   depends_on:
+  #     crypto_postgres:
+  #       condition: service_healthy
+  #     crypto_redis:
+  #       condition: service_healthy
+  #     crypto_kafka:
+  #       condition: service_healthy
 
 volumes:
   pgdata:
