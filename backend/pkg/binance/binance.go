@@ -2,9 +2,11 @@ package binance
 
 import (
 	"context"
+	"crypto_price_tracker_backend/internal/domain/entity"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -21,60 +23,50 @@ type Config struct {
 func DefaultConfig(symbols []string) *Config {
 	return &Config{
 		Symbols:       symbols,
-		BaseURL:       "wss://stream.binance.com:9443/stream?streams=",
+		BaseURL:       "wss://stream.binance.com:9443",
 		ReconnectWait: 3 * time.Second,
 		ReadTimeout:   60 * time.Second,
 	}
 }
 
-type Ticker struct {
-	EventType string `json:"e"`
-	EventTime int64  `json:"E"`
-	Symbol    string `json:"s"`
-	// json.Number kullanarak hem string hem number formatını destekliyoruz
-	PriceChange     json.Number `json:"p"`
-	ChangePercent   json.Number `json:"P"`
-	WeightedAvg     json.Number `json:"w"`
-	PrevClose       json.Number `json:"x"`
-	CurrentPrice    json.Number `json:"c"`
-	LastQty         json.Number `json:"Q"`
-	BestBid         json.Number `json:"b"`
-	BestBidQty      json.Number `json:"B"`
-	BestAsk         json.Number `json:"a"`
-	BestAskQty      json.Number `json:"A"`
-	OpenPrice       json.Number `json:"o"`
-	HighPrice       json.Number `json:"h"`
-	LowPrice        json.Number `json:"l"`
-	Volume          json.Number `json:"v"`
-	QuoteVolume     json.Number `json:"q"`
-	StatisticsOpen  int64       `json:"O"`
-	StatisticsClose int64       `json:"C"`
-	FirstTradeID    int64       `json:"F"`
-	LastTradeID     int64       `json:"L"`
-	TradeCount      int64       `json:"n"`
-}
-
 type combinedStream struct {
-	Data Ticker `json:"data"`
+	Data entity.Ticker `json:"data"`
 }
 
 type Client struct {
 	cfg      *Config
 	log      *zap.Logger
-	TickerCh chan *Ticker
+	TickerCh chan *entity.Ticker
+
+	mu   sync.Mutex
+	conn *websocket.Conn
 }
 
-func NewClient(cfg *Config, log *zap.Logger) *Client {
+type ClientInterface interface {
+	Connect(ctx context.Context) error
+	Subscribe(symbol string) error
+	Unsubscribe(symbol string) error
+	GetTickerChan() chan *entity.Ticker
+	Close()
+	GetHistoricalPrices(ctx context.Context, symbol string, limit int) ([]HistoricalPrice, error)
+	GetLatestPrice(ctx context.Context, symbol string) ([]byte, error)
+}
+
+func NewClient(cfg *Config, log *zap.Logger) ClientInterface {
 	return &Client{
 		cfg:      cfg,
 		log:      log,
-		TickerCh: make(chan *Ticker, 256),
+		TickerCh: make(chan *entity.Ticker, 256),
 	}
 }
 
 func (c *Client) Connect(ctx context.Context) error {
 	url := c.buildURL()
 	c.log.Info("Binance connecting", zap.String("url", url))
+
+	minWait := c.cfg.ReconnectWait
+	maxWait := 1 * time.Minute
+	currentWait := minWait
 
 	for {
 		if ctx.Err() != nil {
@@ -83,25 +75,44 @@ func (c *Client) Connect(ctx context.Context) error {
 
 		conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
 		if err != nil {
-			c.log.Warn("Binance connect error", zap.Error(err), zap.Duration("wait", c.cfg.ReconnectWait))
+			c.log.Warn("Binance connect error", zap.Error(err), zap.Duration("wait", currentWait))
 			select {
 			case <-ctx.Done():
 				c.log.Error("Context cancelled", zap.Error(ctx.Err()))
 				return nil
-			case <-time.After(c.cfg.ReconnectWait):
+			case <-time.After(currentWait):
+				currentWait *= 2
+				if currentWait > maxWait {
+					currentWait = maxWait
+				}
 				continue
 			}
 		}
 
+		c.mu.Lock()
+		c.conn = conn
+		c.mu.Unlock()
+
 		c.log.Info("✅ Binance bağlandı")
 		c.readLoop(ctx, conn)
 
-		// readLoop if closed connection, try to reconnect
+		c.mu.Lock()
+		c.conn = nil
+		c.mu.Unlock()
+
 		if ctx.Err() != nil {
 			return nil
 		}
-		c.log.Warn("Binance connection lost, reconnecting...", zap.Duration("wait", c.cfg.ReconnectWait))
-		time.Sleep(c.cfg.ReconnectWait)
+		c.log.Warn("Binance connection lost, reconnecting...", zap.Duration("wait", currentWait))
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(currentWait):
+			currentWait *= 2
+			if currentWait > maxWait {
+				currentWait = maxWait
+			}
+		}
 	}
 }
 
@@ -138,7 +149,7 @@ func (c *Client) readLoop(ctx context.Context, conn *websocket.Conn) {
 	}
 }
 
-func (c *Client) parse(msg []byte) (*Ticker, error) {
+func (c *Client) parse(msg []byte) (*entity.Ticker, error) {
 	var s combinedStream
 	if err := json.Unmarshal(msg, &s); err != nil {
 		return nil, err
@@ -150,9 +161,61 @@ func (c *Client) parse(msg []byte) (*Ticker, error) {
 }
 
 func (c *Client) buildURL() string {
+	baseURL := strings.TrimSuffix(c.cfg.BaseURL, "/")
+
+	if len(c.cfg.Symbols) == 0 {
+		return baseURL + "/ws"
+	}
+
 	streams := make([]string, len(c.cfg.Symbols))
 	for i, s := range c.cfg.Symbols {
 		streams[i] = strings.ToLower(s) + "@ticker"
 	}
-	return c.cfg.BaseURL + strings.Join(streams, "/")
+	return baseURL + "/stream?streams=" + strings.Join(streams, "/")
+}
+
+func (c *Client) Subscribe(symbol string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn == nil {
+		return fmt.Errorf("Connection not ready")
+	}
+
+	msg := map[string]any{
+		"method": "SUBSCRIBE",
+		"params": []string{strings.ToLower(symbol) + "@ticker"},
+		"id":     time.Now().Unix(),
+	}
+
+	return c.conn.WriteJSON(msg)
+}
+
+func (c *Client) Unsubscribe(symbol string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn == nil {
+		return nil
+	}
+
+	msg := map[string]interface{}{
+		"method": "UNSUBSCRIBE",
+		"params": []string{strings.ToLower(symbol) + "@ticker"},
+		"id":     time.Now().Unix(),
+	}
+
+	return c.conn.WriteJSON(msg)
+}
+
+func (c *Client) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.conn != nil {
+		c.conn.Close()
+	}
+}
+
+func (c *Client) GetTickerChan() chan *entity.Ticker {
+	return c.TickerCh
 }

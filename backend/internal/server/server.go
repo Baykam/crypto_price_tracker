@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto_price_tracker_backend/config"
+	httpHandler "crypto_price_tracker_backend/internal/delivery/http"
 	"crypto_price_tracker_backend/internal/delivery/websocket"
 	"crypto_price_tracker_backend/pkg/binance"
 	kafkaConsumer "crypto_price_tracker_backend/pkg/kafka"
@@ -28,11 +29,12 @@ type server struct {
 	kafkaConsumer *kafkaConsumer.Consumer
 	sql           *pgxpool.Pool
 	cache         redis.UniversalClient
-	binanceClient *binance.Client
+	binanceClient binance.ClientInterface
 	cfg           *config.Config
 
-	httpServer *http.Server
-	hub        *websocket.Hub
+	httpServer   *http.Server
+	httpProvider httpHandler.ProviderInterface
+	hub          *websocket.Hub
 }
 
 func NewServer(cfg *config.Config) *server {
@@ -53,22 +55,23 @@ func (s *server) Run() error {
 	s.runSql(ctx)
 	s.runKafka()
 
-	s.hub = websocket.NewHub()
+	s.httpProvider = httpHandler.NewProvider(s.binanceClient, s.log, s.cache)
+	s.hub = websocket.NewHub(s.cache)
 	go s.hub.Run()
+	go s.hub.ListenRedis(ctx)
 
-	// ── Binance → Kafka → Hub pipeline ───────────────────────────────────────
 	s.runBinance(ctx)
 
 	s.setupHTTP()
 	go func() {
-		s.log.Info("🚀 HTTP server başlatıldı", zap.String("addr", s.cfg.Server.ServerHost))
+		s.log.Info("🚀 HTTP server started", zap.String("addr", s.cfg.Server.ServerHost))
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			s.log.Fatal("http server hatası", zap.Error(err))
+			s.log.Fatal("http server error", zap.Error(err))
 		}
 	}()
 
 	<-ctx.Done()
-	s.log.Info("🔌 Kapatılıyor...")
+	s.log.Info("🔌 Graceful shutdown initiated...")
 	return s.shutdown()
 }
 
@@ -79,25 +82,25 @@ func (s *server) runBinance(ctx context.Context) {
 
 	go func() {
 		if err := s.binanceClient.Connect(ctx); err != nil {
-			s.log.Error("binance bağlantı hatası", zap.Error(err))
+			s.log.Error("binance connection error", zap.Error(err))
 		}
 	}()
 
 	// Binance ticker → Kafka publisher goroutine
 	go func() {
-		for ticker := range s.binanceClient.TickerCh {
+		for ticker := range s.binanceClient.GetTickerChan() {
 			data, err := json.Marshal(ticker)
 			if err != nil {
-				s.log.Error("ticker marshal hatası", zap.Error(err))
+				s.log.Error("ticker marshal error", zap.Error(err))
 				continue
 			}
 			if err := s.kafkaProducer.Publish(ctx, ticker.Symbol, data); err != nil {
-				s.log.Warn("kafka publish hatası", zap.Error(err))
+				s.log.Warn("kafka publish error", zap.Error(err))
 			}
 		}
 	}()
 
-	s.log.Info("✅ Binance stream başlatıldı",
+	s.log.Info("✅ Binance stream started",
 		zap.Strings("symbols", s.cfg.Binance.Symbols),
 	)
 }
@@ -106,20 +109,21 @@ func (s *server) shutdown() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// HTTP server kapat
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-		s.log.Error("http shutdown hatası", zap.Error(err))
+		s.log.Error("http shutdown error", zap.Error(err))
 	}
 
-	// Kafka kapat
+	if s.binanceClient != nil {
+		s.log.Info("Closing Binance connection...")
+		s.binanceClient.Close()
+	}
+
 	s.kafkaProducer.Close()
 	s.kafkaConsumer.Close()
-
-	// DB ve cache kapat
 	s.sql.Close()
 	s.cache.Close()
 
-	s.log.Info("✅ Servis kapatıldı")
+	s.log.Info("✅ Servis closed gracefully")
 	return nil
 }
 
@@ -155,19 +159,24 @@ func (s *server) runRedis(ctx context.Context) {
 func (s *server) runKafka() {
 	producer, err := kafkaConsumer.NewProducer(s.cfg.Kafka)
 	if err != nil {
-		s.log.Fatal("kafka producer başlatılamadı", zap.Error(err))
+		s.log.Fatal("kafka producer not started", zap.Error(err))
 	}
-	s.kafkaProducer = producer // server struct'ına ata
+	s.kafkaProducer = producer
 
 	kk, err := kafkaConsumer.NewConsumer(s.cfg.Kafka, s.log)
 	if err != nil {
-		s.log.Fatal("kafka consumer", zap.Error(err))
+		s.log.Fatal("kafka consumer not started", zap.Error(err))
 	}
 
 	go func() {
 		if err := kk.Consume(context.Background(), func(key, value []byte) error {
-			s.log.Info("kafka message", zap.String("Key", string(key)), zap.ByteString("value", value))
-			s.hub.Broadcast(string(key), value)
+			symbol := string(key)
+
+			s.log.Debug("Kafka --> Redis", zap.String("symbol", symbol))
+			if err := s.cache.Set(context.Background(), symbol, value, 0).Err(); err != nil {
+				s.log.Error("redis set error", zap.Error(err))
+			}
+
 			return nil
 		}); err != nil {
 			s.log.Fatal("kafka consume", zap.Error(err))

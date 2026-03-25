@@ -33,10 +33,9 @@ func NewHandler(hub *Hub) *Handler {
 func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	symbol := strings.ToUpper(r.PathValue("symbol"))
 
-	// Eğer eski usul devam ediyorsan:
 	if symbol == "" {
 		symbol = strings.ToUpper(strings.TrimPrefix(r.URL.Path, "/ws/"))
-		symbol = strings.Trim(symbol, "/") // Kenardaki / işaretlerini temizle
+		symbol = strings.Trim(symbol, "/")
 	}
 
 	if symbol == "" {
