@@ -64,9 +64,14 @@ class PriceBloc extends Bloc<PriceEvent, PriceState> {
     try {
       _repository.switchSymbol(s.symbol, event.newSymbol);
 
-      final newHistory = await _repository.getHistory(event.newSymbol);
-      final lastPrice = await _repository.getLastPrice(event.newSymbol);
+      final results = await Future.wait([
+        _repository.getHistory(event.newSymbol),
+        _repository.getLastPrice(event.newSymbol),
+      ]);
 
+      final newHistory = results[0] as List<CandleModel>;
+      final lastPrice = results[1] as PriceModel;
+      
       add(_OnPriceUpdated(
         history: newHistory, 
         symbol: event.newSymbol,
