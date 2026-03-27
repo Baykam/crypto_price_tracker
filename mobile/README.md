@@ -57,7 +57,30 @@ A cross-platform Flutter app that displays real-time cryptocurrency prices with 
 
 ## 🧪 Testing
 
-- Widget tests are located in `test/`.
+- Widget and unit tests are located in `test/`.
+- Eklendiği klasörler ve testler:
+  - `test/domain/model_test.dart`:
+    - `PriceModel.fromJson`
+    - `PriceModel.nullData`
+    - `CandleModel.fromJson`
+    - `CandleModel.fromList`
+    - `CandleModel.fromPrice`
+  - `test/presentation/price_bloc_test.dart`:
+    - `PriceBloc` başlangıç durumu
+    - `StartPriceStreaming` akışı
+    - Tarihçeye yeni fiyat ekleme
+    - Yanlış sembol güncellemesini göz ardı etme
+    - `SwitchSymbolEvent` değişikliği
+    - 100 mum sınırlaması
+  - `test/core/state_initializer_test.dart`:
+    - `StateInitializer` widget kökünü sarar
+  - `test/data/crypto_repository_impl_test.dart`:
+    - `CryptoRepositoryImpl.getHistory` (doğru veri)
+    - `CryptoRepositoryImpl.getLastPrice` (doğru veri)
+    - Geçersiz tarihçe verisi -> boş liste
+    - Hata durumunda `PriceModel` default
+    - WebSocket yayınından `PriceModel` dönüşüm
+
 - Run:
 
   ```bash

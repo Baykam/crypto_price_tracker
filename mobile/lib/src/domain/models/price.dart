@@ -25,13 +25,13 @@ class PriceModel extends Equatable {
   factory PriceModel.fromJson(Map<String, dynamic> json) {
     return PriceModel(
       symbol: json['s']?.toString() ?? '',
-      price: _parseToDouble(json['p']),
-      change24h: _parseToDouble(json['P']),
+      price: parseToDouble(json['p']),
+      change24h: parseToDouble(json['P']),
       timestamp: DateTime.fromMillisecondsSinceEpoch(json['E'] ?? DateTime.now().millisecondsSinceEpoch),
     );
   }
 
-  static double _parseToDouble(dynamic value) {
+  static double parseToDouble(dynamic value) {
     if (value == null) return 0.0;
     if (value is num) return value.toDouble();
     return double.tryParse(value.toString()) ?? 0.0;

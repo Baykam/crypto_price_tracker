@@ -22,6 +22,9 @@ git clone https://github.com/Baykam/crypto_price_tracker
 
 ## 🧩 Architecture & Paths Overview
 
+### Architecture Decision
+This project uses Kafka to provide durable, scalable message streaming between data ingestion services and backend consumers, enabling resilient handling of high-frequency market updates and horizontal scaling. WebSocket is chosen for real-time price distribution to mobile clients because it delivers low-latency bidirectional communication and keeps the client state synchronized with server-side market changes. Go is selected for backend processing due to its performance characteristics and built-in concurrency, which fits event-driven price streams well. Flutter enables a single codebase for mobile/web/desktop support, accelerating UI development and consistent design. This architecture emphasizes a clean separation of concerns, fault tolerance, and fast feedback loops for both API and front-end clients.
+
 ### backend (Go)
 - Root: `backend/`
 - Entry point: `backend/cmd/server/main.go`

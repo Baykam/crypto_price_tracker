@@ -195,6 +195,29 @@ Example payload:
 Baymuhammet Gummanov — Flutter & Go developer
 [github.com/Baykam](https://github.com/Baykam) · [LinkedIn](https://linkedin.com/in/baymuhammet-gumanow-0aaa96204)
 
+---
+
+## 🧪 Test coverage added (English summary)
+
+The following unit tests were added to the project and are currently passing with `go test ./...`:
+
+1. `internal/domain/entity/order_test.go`
+   - `TestOrderValidate_Success`
+   - `TestOrderValidate_Error_InvalidType`
+   - `TestOrderMatchesPrice`
+
+2. `internal/domain/entity/price_test.go`
+   - `TestPrice_IsValid`
+   - `TestPrice_IsRising_IsFalling`
+   - `TestPrice_SpreadPercent_String`
+
+3. `pkg/psql/psql_test.go`
+   - `TestConfigDSN` - ensures `DSN()` builds a correct PostgreSQL connection string.
+
+4. `internal/server/http_test.go`
+   - `TestHandleHealth` - checks `handleHealth` returns HTTP 200 and JSON content type.
+
+---
 
 ```
 cmd/server/main.go          entry point, wires everything together
