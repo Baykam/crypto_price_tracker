@@ -6,6 +6,9 @@
 - `backend/`: Go-based server with WebSocket + REST API layers, data sources (Binance), and middleware.
 - `mobile/`: Flutter-based cross-platform mobile application (Android/iOS/Web/Desktop).
 
+![crypto price tracker demo](./crypto_tracker.gif)
+
+
 ---
 
 ## 🌍 Git Location (Repo URL)
@@ -23,7 +26,12 @@ git clone https://github.com/Baykam/crypto_price_tracker
 ## 🧩 Architecture & Paths Overview
 
 ### Architecture Decision
-This project uses Kafka to provide durable, scalable message streaming between data ingestion services and backend consumers, enabling resilient handling of high-frequency market updates and horizontal scaling. WebSocket is chosen for real-time price distribution to mobile clients because it delivers low-latency bidirectional communication and keeps the client state synchronized with server-side market changes. Go is selected for backend processing due to its performance characteristics and built-in concurrency, which fits event-driven price streams well. Flutter enables a single codebase for mobile/web/desktop support, accelerating UI development and consistent design. This architecture emphasizes a clean separation of concerns, fault tolerance, and fast feedback loops for both API and front-end clients.
+- **Go** — chosen for its concurrency model, fits high-frequency WebSocket streams well
+- **Kafka** — decouples data ingestion from consumers, handles market update bursts without data loss
+- **WebSocket** — low-latency push to mobile clients, avoids polling overhead
+- **Flutter** — single codebase for Android/iOS/Web, faster iteration
+- **Redis** — caches latest prices, reduces Binance API load
+
 
 ### backend (Go)
 - Root: `backend/`

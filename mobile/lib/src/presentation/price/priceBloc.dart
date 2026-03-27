@@ -43,9 +43,13 @@ class PriceBloc extends Bloc<PriceEvent, PriceState> {
       await _priceSubscription?.cancel();
       _priceSubscription = _repository.getPriceStream(event.symbol).listen(
         (price) => add(_OnPriceUpdated(price: price)),
-        onError: (err) => add(_InternalErrorEvent("Stream Error: $err")),
+        onError: (err) {
+          if (!isClosed) add(_InternalErrorEvent("Stream Error: $err"));
+        },
         cancelOnError: true,
-        onDone: () => add(_InternalErrorEvent("Connection Lost")),
+        onDone: () {
+          if (!isClosed) add(_InternalErrorEvent("Connection Lost"));
+        },
       );
     } catch (e) {
       add(_InternalErrorEvent("Initialization Error: $e"));
