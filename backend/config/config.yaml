@@ -4,8 +4,8 @@ app:
 
 server:
   api: 0.0.0.0:8080            
-  server_port: "8080"
-  grpc_port: "9090"
+  server_port: ":8080"
+  grpc_port: ":9090"
 
 
 log:
@@ -38,11 +38,11 @@ kafka:
   read_timeout_sec: 10
 
 binance:
-  base_url: "wss://stream.binance.com:9443/stream?streams="
+  base_url: "wss://stream.binance.com:9443"
   reconnect_wait_sec: 3
   read_timeout_sec: 60
   symbols:
-    - BTCUSDT
-    - ETHUSDT
-    - BNBUSDT
-    - SOLUSDT
+    # - BTCUSDT
+    # - ETHUSDT
+    # - BNBUSDT
+    # - SOLUSDT

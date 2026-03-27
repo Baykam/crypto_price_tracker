@@ -100,7 +100,7 @@ func Load() (*Config, error) {
 		)
 		rootDir := replacer.Replace(currentDir)
 
-		path = filepath.Join(rootDir, "config", "config.yaml")
+		path = filepath.Join(rootDir, "config", "config.docker.yaml")
 	}
 
 	fmt.Printf("Loading config from: %s\n", path)

@@ -1,7 +1,3 @@
-
-import 'package:flutter/material.dart';
+import 'package:mobile/bootstrap.dart';
 import 'package:mobile/src/app.dart';
-
-void main() {
-  runApp(App());
-}
+void main() => ApplicationInitialize().bootstrap(() => App());

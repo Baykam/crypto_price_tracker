@@ -55,12 +55,12 @@ func (s *server) Run() error {
 	s.runSql(ctx)
 	s.runKafka()
 
+	s.runBinance(ctx)
+
 	s.httpProvider = httpHandler.NewProvider(s.binanceClient, s.log, s.cache)
 	s.hub = websocket.NewHub(s.cache)
-	go s.hub.Run()
+	go s.hub.Run(ctx, s.binanceClient)
 	go s.hub.ListenRedis(ctx)
-
-	s.runBinance(ctx)
 
 	s.setupHTTP()
 	go func() {
@@ -78,7 +78,8 @@ func (s *server) Run() error {
 // // ── Binance ───────────────────────────────────────────────────────────────────
 
 func (s *server) runBinance(ctx context.Context) {
-	s.binanceClient = binance.NewClient(s.cfg.Binance, s.log)
+	cfg := binance.DefaultConfig()
+	s.binanceClient = binance.NewClient(cfg, s.log)
 
 	go func() {
 		if err := s.binanceClient.Connect(ctx); err != nil {
@@ -132,7 +133,7 @@ func (s *server) setupHTTP() {
 	s.registerRoutes(mux)
 
 	s.httpServer = &http.Server{
-		Addr:         s.cfg.Server.ServerHost,
+		Addr:         s.cfg.Server.ServerPort,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -171,12 +172,17 @@ func (s *server) runKafka() {
 	go func() {
 		if err := kk.Consume(context.Background(), func(key, value []byte) error {
 			symbol := string(key)
+			ctx := context.Background()
 
 			s.log.Debug("Kafka --> Redis", zap.String("symbol", symbol))
-			if err := s.cache.Set(context.Background(), symbol, value, 0).Err(); err != nil {
-				s.log.Error("redis set error", zap.Error(err))
-			}
 
+			// Cache için Set
+			s.cache.Set(ctx, "ticker:"+symbol, value, 0)
+
+			// WebSocket için Publish ✅
+			if err := s.cache.Publish(ctx, "ticker:"+symbol, value).Err(); err != nil {
+				s.log.Error("redis publish error", zap.Error(err))
+			}
 			return nil
 		}); err != nil {
 			s.log.Fatal("kafka consume", zap.Error(err))

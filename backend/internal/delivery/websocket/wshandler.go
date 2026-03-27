@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -103,9 +104,25 @@ func (h *Handler) readPump(conn *gows.Conn, client *Client) {
 	})
 
 	for {
-		_, _, err := conn.ReadMessage()
+		messageType, message, err := conn.ReadMessage()
 		if err != nil {
 			break
+		}
+
+		if messageType == gows.TextMessage {
+			msgStr := string(message)
+
+			if strings.Contains(msgStr, "->") {
+				parts := strings.Split(msgStr, "->")
+				if len(parts) == 2 {
+					oldSymbol := strings.ToUpper(strings.TrimSpace(parts[0]))
+					newSymbol := strings.ToUpper(strings.TrimSpace(parts[1]))
+
+					fmt.Printf("🔄 Switch Request: %s to %s\n", oldSymbol, newSymbol)
+
+					h.hub.SwitchSymbol(client, oldSymbol, newSymbol)
+				}
+			}
 		}
 	}
 }

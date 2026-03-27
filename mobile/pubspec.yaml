@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.7.2
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -13,10 +13,31 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # tables
-  fl_chart: ^0.66.0
+  fl_chart: ^1.1.0
 
   #state
   flutter_bloc: ^9.1.1
+  get_it: ^9.2.1
+  equatable: ^2.0.8
+
+  # network
+  web_socket_channel: ^3.0.3
+  dio: ^5.9.2
+
+  #ui
+  shimmer: ^3.0.0
+  intl: ^0.20.2
+  google_fonts: ^6.3.2
+  flutter_svg: ^2.2.2
+  lottie: ^3.3.2
+  responsive_framework: ^1.5.1
+
+  # db
+  hydrated_bloc: ^11.0.0
+
+  # cache 
+  dio_cache_interceptor: ^4.0.6
+  flutter_secure_storage: ^10.0.0
 
 dev_dependencies:
   flutter_test:

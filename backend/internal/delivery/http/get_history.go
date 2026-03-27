@@ -27,12 +27,12 @@ func NewProvider(p binance.ClientInterface, log *zap.Logger, cache redis.Univers
 }
 
 func (h *Provider) GetHistory(w http.ResponseWriter, r *http.Request) {
-	symbol := r.URL.Query().Get("symbol")
-	limitStr := r.URL.Query().Get("limit")
+	symbol := r.PathValue("symbol")
+	limitStr := r.PathValue("limit")
 
 	limit, _ := strconv.Atoi(limitStr)
 	if limit <= 0 {
-		limit = 5
+		limit = 10
 	}
 
 	if symbol == "" {
